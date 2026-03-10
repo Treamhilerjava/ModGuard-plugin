@@ -1,40 +1,30 @@
-# 🛡️ ModGuard + Sentinel — Client Verification System
+<div align="center">
 
-A **server plugin + client mod security system** designed to help Minecraft servers verify legitimate clients and detect suspicious modifications.
+# 🛡️ ModGuard + Sentinel
 
-Instead of relying on weak client-brand checks, ModGuard uses a **secure encrypted handshake** between the Sentinel client mod and the ModGuard server plugin to validate players on join.
+**Encrypted client verification system for Paper servers**
 
-> 🔗 **More projects by Treamhiler:** [modrinth.com/user/Treamhiler](https://modrinth.com/user/Treamhiler)
-> 💬 **Support & Downloads:** [discord.gg/tFXhkPVpxG](https://discord.gg/tFXhkPVpxG)
-> 🐙 **GitHub:** [github.com/Treamhilerjava](https://github.com/Treamhilerjava)
+[![Modrinth](https://img.shields.io/modrinth/v/modguard?label=Modrinth&logo=modrinth&color=1bd96a)](https://modrinth.com/plugin/modguard)
+[![Discord](https://img.shields.io/discord/1234567890?label=Discord&logo=discord&color=5865F2)](https://discord.gg/tFXhkPVpxG)
+[![Java](https://img.shields.io/badge/Java-21-orange?logo=openjdk)](https://adoptium.net/)
+[![Paper](https://img.shields.io/badge/Paper-1.21.x-white?logo=spigotmc)](https://papermc.io/)
+[![License](https://img.shields.io/badge/License-MIT-blue)](LICENSE)
+
+</div>
+
+---
+
+ModGuard verifies connecting players using a secure encrypted handshake between the server plugin and a required client mod (Sentinel). It detects banned modifications far more reliably than client-brand checks — the mod list is collected by Sentinel via FabricLoader and returned inside an encrypted, HMAC-signed payload the server decrypts and verifies.
 
 ---
 
 ## 📦 Components
 
 ### 🔌 ModGuard — Server Plugin
-> Runs on Paper / Spigot servers
-
-- Sends an encrypted challenge to connecting players
-- Verifies the client response and checks for banned mods
-- Supports configurable kick messages, whitelist, and blacklist
-- Works on both online-mode and cracked (offline-mode) servers
-- Bedrock players (via Geyser/Floodgate) are automatically bypassed
+Sends an RSA-encrypted challenge on join, verifies the response, checks mod IDs against a blacklist, enforces a minimum Sentinel version, and optionally limits total installed mods. Supports cracked servers, Geyser/Floodgate auto-bypass, configurable kick messages, player whitelist, and persistent mod history.
 
 ### 🧩 Sentinel — Client Mod
-> Runs on the player's Fabric client
-
-- Receives the server challenge and responds with an encrypted mod list
-- Uses AES-256-GCM + RSA-2048 encryption
-- Zero configuration needed — works automatically on join
-- Zero performance impact during gameplay
-
-### 🐍 Blacklist Builder — Python Script
-> Utility to generate ModGuard blacklists from hack client jars
-
-- Scans a folder of Fabric hack client `.jar` files
-- Extracts mod IDs from `fabric.mod.json` inside each jar
-- Outputs a ready-to-use `modblacklist.json` for ModGuard
+Installed by the player. Receives the server challenge, collects the full mod list via FabricLoader, encrypts and returns it. Zero configuration. Zero performance impact.
 
 ---
 
@@ -42,138 +32,156 @@ Instead of relying on weak client-brand checks, ModGuard uses a **secure encrypt
 
 ```
 Player joins
-    → Server sends encrypted challenge (RSA-2048 public key + nonce + HMAC secret)
-    → Sentinel collects mod list via FabricLoader
-    → Sentinel encrypts response (AES-256-GCM, key wrapped with RSA)
-    → Sentinel sends encrypted response back to server
-    → Server decrypts, verifies HMAC, checks blacklist
-    → Player approved or kicked
+  → Server sends encrypted challenge
+      (RSA-2048 public key + nonce + HMAC-SHA256 secret)
+  → Sentinel collects mod list via FabricLoader
+  → Sentinel encrypts response
+      (AES-256-GCM, key wrapped with RSA/OAEP/SHA-256)
+  → Server decrypts payload, verifies HMAC
+  → Protocol version + Sentinel version checked
+  → Mod list compared against blacklist
+  → Optional mod count limit checked
+  → Player approved or kicked with a configurable message
 ```
+
+---
+
+## 🔒 Security Model
+
+| Property | Implementation |
+|---|---|
+| Encryption | AES-256-GCM (authenticated) |
+| Key exchange | RSA-2048 / OAEP / SHA-256 |
+| Payload signing | HMAC-SHA256 |
+| Replay protection | Nonce per challenge |
+| Key persistence | Keypair generated fresh each session, never written to disk |
+| Spoofing | Protocol version verified inside the encrypted payload |
 
 ---
 
 ## 🚀 Installation
 
-### Server (ModGuard)
-1. Download `ModGuard.jar`
-2. Drop it into your server's `plugins/` folder
-3. Start the server — `plugins/ModGuard/config.yml` is generated automatically
+**Server:**
+1. Drop `ModGuard.jar` into `plugins/`
+2. Restart — `config.yml` and `modblacklist.json` are generated automatically
 
-### Client (Sentinel)
-1. Download the correct `Sentinel-<version>.jar` for your Minecraft version
-2. Drop it into your `.minecraft/mods/` folder
-3. Launch the game — no configuration needed
+**Client:**
+1. Drop `Sentinel-<version>.jar` into `.minecraft/mods/`
+2. Launch — no configuration needed
 
 ---
 
-## 📋 Supported Versions
+## 🚫 Default Blacklisted Mods
 
-| Component | Versions |
-|---|---|
-| ModGuard (Plugin) | Paper / Spigot 1.21.x |
-| Sentinel (Client Mod) | Fabric 1.21 — 1.21.11 |
+Pre-seeded in `modblacklist.json` on first run:
 
----
+| Mod ID |
+|---|
+| `meteor-client` |
+| `impact` |
+| `wurst` |
+| `liquidbounce` |
+| `aristois` |
+| `sigma` |
+| `thunderhack` |
+| `wolfram` |
+| `baritone` |
+| `freecam` |
+| `marlows-crystal-optimizer` |
 
-## 📦 Mod Loader Compatibility
-
-| Loader | Requires Sentinel |
-|---|---|
-| Fabric | ✅ Yes |
-| Quilt | ✅ Yes (not officially tested) |
-| Vanilla | ❌ No — automatically handled |
-| Bedrock (Geyser) | ❌ No — automatically bypassed |
-| Forge | ❌ Not supported yet |
-| NeoForge | ❌ Not supported yet |
-| OptiFine | ❌ Not supported (runs on Forge) |
-
-> **Mobile launchers (PojavLauncher, Zalith, Fold Craft, etc.):**
-> Running Fabric → needs Sentinel | Running Vanilla → no Sentinel needed
+Add or remove entries with `/modguard blacklist add <modid>` or by editing `modblacklist.json` directly.
 
 ---
 
-## 🔧 ModGuard Configuration
+## ⚙️ Configuration
 
 ```yaml
-challenge-timeout-seconds: 15
-challenge-delay-ticks: 40
-allow-floodgate: true
-show-mod-list-in-console: true
-highlight-banned-mods: true
+# plugins/ModGuard/config.yml
+
+offline-mode: false               # true for cracked servers
+allow-floodgate: true             # Bedrock players via Geyser skip verification
+
+challenge-timeout-seconds: 15    # seconds client has to respond before kick
+challenge-delay-ticks: 40        # ticks after join before challenge is sent
+
+min-sentinel-version: "1.0.0"    # kick players on older Sentinel builds
+protocol-version: 1              # must match Sentinel — only change if updating both
+
 enable-mod-count-limit: false
 max-mod-count: 50
 
-protocol-version: 1
-min-sentinel-version: "1.0.0"
-offline-mode: false
+show-mod-list-in-console: true
+highlight-banned-mods: true
 
 kick-messages:
   missing-sentinel:   "&cSentinel mod is required to join this server."
-  banned-mod:         "&cBanned mod(s) installed: &e{mods} &cremove them to join."
-  timeout:            "&cVerification timed out. Please install the Sentinel mod."
-  mod-count-exceeded: "&cToo many mods installed. Maximum allowed: &e{max}"
+  banned-mod:         "&cAccess denied."
   outdated-sentinel:  "&cYour Sentinel mod is outdated. Please update to &ev{version}&c."
   protocol-mismatch:  "&cSentinel version mismatch. Please update your Sentinel mod."
+  timeout:            "&cVerification timed out."
+  mod-count-exceeded: "&cToo many mods installed. Maximum allowed: &e{max}"
 ```
 
 ---
 
-## 💻 Commands
+## 📋 Client Compatibility
 
-Permission node: `modguard.admin`
+| Scenario | Behavior |
+|---|---|
+| Fabric + Sentinel installed | Full verification |
+| Vanilla (no mods) | Handled automatically — no Sentinel needed |
+| Bedrock / Geyser | Bypassed automatically |
+| Cracked / offline server | Supported via `offline-mode: true` |
+| Whitelisted player | Skips verification entirely |
+| Forge / NeoForge | Not supported |
+
+---
+
+## 💻 Commands & Permissions
 
 | Command | Description |
 |---|---|
-| `/modguard blacklist <add\|remove\|list> [modId]` | Manage the mod blacklist |
-| `/modguard whitelist <add\|remove\|list> [player]` | Manage the player whitelist |
-| `/modguard mods <player>` | View a player's mod list |
-| `/modguard check <player>` | Manually re-verify a player |
-| `/modguard version` | Show version and protocol info |
-| `/modguard status` | Show current verification status |
+| `/modguard blacklist <add\|remove\|list>` | Manage the mod blacklist |
+| `/modguard whitelist <add\|remove\|list>` | Manage the player whitelist |
+| `/modguard mods <player>` | View a player's verified mod list and last seen time |
+| `/modguard check <player>` | Re-send a verification challenge to an online player |
+| `/modguard status` | Show online players, pending verifications, and plugin info |
 | `/modguard reload` | Reload configuration |
 
----
-
-## 🔒 Security
-
-- **RSA-2048** keypair generated fresh per player session — never written to disk
-- **AES-256-GCM** encrypts the mod list payload — authenticated and tamper-proof
-- **HMAC-SHA256** signs the payload — server secret never sent to client
-- **Nonce** prevents replay attacks
-- **Session ID** binds each challenge to its response
-- Protocol and Sentinel version are verified inside the encrypted payload — cannot be spoofed
-
----
-
-## 🐍 Blacklist Builder
-
-```
-blacklistbuilder/
-    blacklist_builder.py
-    hack_clients/         ← drop hack client jars here
-    output/
-        modblacklist.json ← generated output
-```
-
-```bash
-python blacklist_builder.py
-```
-
-No pip dependencies — Python 3.x stdlib only.
+> Permission: `modguard.admin` — defaults to OP.
 
 ---
 
 ## 📁 Project Structure
 
 ```
-ModGuard/               ← Server plugin (Maven / Paper)
-Sentinel/               ← Client mod (Gradle / Fabric)
-blacklistbuilder/       ← Utility script (Python)
+src/main/java/org/modGuard/
+├── ModGuard.java              # Plugin entry point, messaging channel registration
+├── ChallengeService.java      # Sends encrypted challenges on join
+├── ResponseHandler.java       # Decrypts and validates client responses
+├── CryptoService.java         # RSA/AES/HMAC crypto operations
+├── SessionManager.java        # Per-player session state and keypair storage
+├── BlacklistManager.java      # modblacklist.json CRUD
+├── WhitelistManager.java      # whitelist.json CRUD
+├── ModHistoryManager.java     # Per-player mod history persistence
+├── CommandHandler.java        # /modguard command handler
+├── ConfigManager.java         # Config key access
+├── PlayerState.java           # Player verification status model
+└── Log.java                   # Logging helper
 ```
 
 ---
 
-## 🙏 Credits
+## 📜 Changelog
 
-Developed by **Treamhiler**
-[modrinth.com/user/Treamhiler](https://modrinth.com/user/Treamhiler) • [discord.gg/tFXhkPVpxG](https://discord.gg/tFXhkPVpxG) • [github.com/Treamhilerjava](https://github.com/Treamhilerjava)
+See [CHANGELOG.md](CHANGELOG.md)
+
+---
+
+<div align="center">
+
+💬 **[Discord](https://discord.gg/tFXhkPVpxG)** · 🔗 **[Modrinth](https://modrinth.com/user/Treamhiler)** · 🐙 **[GitHub](https://github.com/Treamhilerjava)**
+
+Made by **Treamhiler**
+
+</div>
